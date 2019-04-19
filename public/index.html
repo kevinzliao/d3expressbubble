@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+
+<style>
+    body {
+        font: 14px sans-serif;
+    }
+
+    .state {
+        fill: lightgrey;
+        stroke: white;
+        stroke-width: 1px;
+        transition: fill .1s linear;
+    }
+
+    .circle:hover {
+        fill: coral;
+        transition: fill .1s linear;
+    }
+
+    .overlay {
+        fill: none;
+    }
+
+    .focus text {
+        fill: black;
+        font-weight: 600;
+    }
+
+    .circle {
+        opacity: 50%;
+    }
+</style>
+
+<body>
+    <script src="http://d3js.org/d3.v3.min.js" charset="utf-8"></script>
+    <script src="http://d3js.org/topojson.v1.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.20.1/moment.min.js"></script>
+
+    <script>
+
+        var width = 960,
+            height = 500;
+
+        var projection = d3.geo.albersUsa()
+            .scale(1000)
+            .translate([width / 2, height / 2]);
+
+        var path = d3.geo.path()
+            .projection(projection);
+
+        var svg = d3.select("body").append("svg")
+            .attr("width", width)
+            .attr("height", height);
+
+
+        d3.json("us2.json", function (error, us) {
+            svg.selectAll(".state")
+                .data(topojson.feature(us, us.objects.usStates).features)
+                .enter()
+                .append("path")
+                .attr("class", "state")
+                .attr("d", path)
+
+
+            var focus = svg.append("g")
+                .attr("class", "focus")
+                .style("display", "none");
+
+            focus.append("text")
+                .attr("class", "abbr")
+                .attr("x", -10)
+                .attr("y", -80)
+                .attr("dy", ".35em");
+
+            focus.append("text")
+                .attr("class", "latlng")
+                .attr("x", -10)
+                .attr("y", -60)
+                .attr("dy", ".35em");
+
+            focus.append("text")
+                .attr("class", "hours")
+                .attr("x", -10)
+                .attr("y", -40)
+                .attr("dy", ".35em");
+                
+                
+
+            var radius = d3.scale.sqrt()
+                .domain([0, 5000])
+                .range([0, 20]);
+
+            var colorScale = d3.scale.linear().domain([0, 100000]).range(['#ddd', 'red']);
+
+            d3.json('http://localhost:3001/api', function (err, mydata) {
+
+
+                mydata.forEach(function (mls) {
+                    d3.select('body').append('p').text(JSON.stringify(mls));
+                    console.log(projection([mls["long"], mls["lat"]]))
+                    if (mls["lat"] && mls["long"]) {
+                        let hours = Math.round(Math.abs(moment(mls["last_updated"]).diff(moment().now, 'hours', true) * 100)) / 100
+                        console.log(hours)
+
+                        svg.append("g")
+                            .append("circle")
+                            .attr("class", "circle")
+                            .attr("cx", projection([mls["long"], mls["lat"]])[0])
+                            .attr("cy", projection([mls["long"], mls["lat"]])[1])
+                            .attr("r", radius(mls['active_listings']))
+                            .attr("fill", colorScale(hours))
+                            .on("mouseover", function () { focus.style("display", null); })
+                            .on("mouseout", function () { focus.style("display", "none"); })
+                            .on("mousemove", function (d) {
+                                var pos = [Math.round(mls["lat"]*100)/100, Math.round(mls["long"]*100)/100]
+                                focus.select(".abbr").text(mls["market_name"]);
+                                console.log(projection([mls["long"], mls["lat"]])[0])
+                                console.log(pos[0])
+                                focus.select(".latlng").text("(" + pos[0] + "\u00B0, " + pos[1] + "\u00B0)");
+                                focus.select(".hours").text(mls['last_updated'] ? `${hours} hours stale` : 'hours unknown (null data)');
+                                focus.attr("transform", "translate(" + projection([mls["long"], mls["lat"]])[0] + "," + projection([mls["long"], mls["lat"]])[1] + ")");
+                            });
+
+                    }
+                })
+
+            })
+
+        });
+
+
+    </script>
+    <p></p>
+</body>
